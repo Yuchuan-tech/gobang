@@ -1,6 +1,6 @@
-add_executable(gobang main.c)
+add_executable(gobang main.c "board.h" "board.c" "logic.h" "logic.c" "stats.h" stats.c "ai.h" "ai.c")
 
-# raylib璺緞锛堟敼鎴愪綘鐨勫疄闄呰矾寰勶級
+# raylib路径（改成你的实际路径）
 set(RAYLIB_PATH "D:/Microsoft Visual Studio/Tools/raylib-6.0")
 
 target_include_directories(gobang PRIVATE ${RAYLIB_PATH}/include)
