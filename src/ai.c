@@ -1,22 +1,24 @@
 #include "ai.h"
 #include <stdlib.h>
 
-// ÆåĞÍÈ¨Öµ±í(Ô½´óÔ½ÏÂ)
-#define WIN_SCORE       1000000  // Á¬Îå
-#define LIVE_FOUR       100000   // »îËÄ
-#define SLEEP_FOUR       10000   // ³åËÄ
-#define LIVE_THREE        5000   // »îÈı
-#define SLEEP_THREE        500   // ÃßÈı
-#define LIVE_TWO            50   // »î¶ş
-#define SLEEP_TWO             5   // Ãß¶ş
+// ä¼°å€¼æƒé‡ï¼ˆè¶Šå¤§è¶Šå¥½ï¼‰
+#define WIN_SCORE       1000000  // äº”è¿
+#define LIVE_FOUR        100000  // æ´»å››
+#define SLEEP_FOUR        10000  // çœ å››
+#define LIVE_THREE         5000  // æ´»ä¸‰
+#define SLEEP_THREE         500  // çœ ä¸‰
+#define LIVE_TWO             50  // æ´»äºŒ
+#define SLEEP_TWO             5  // çœ äºŒ
 
-// ·½ÏòÊı×é(Ã××Ö)
+// å››ä¸ªæ–¹å‘
 static const int dx[4] = { 1, 0, 1, 1 };
 static const int dy[4] = { 0, 1, 1, -1 };
 
+// ========== å·¥å…·å‡½æ•° ==========
+
+// ä»æŸç‚¹æ²¿æ–¹å‘æ•°è¿ç»­åŒè‰²å­ï¼ˆå«è‡ªèº«ï¼‰
 static int CountDirection(Board* board, int x, int y, int dir, int piece) {
     int count = 1;
-
     for (int step = 1; step <= 5; step++) {
         int nx = x + dx[dir] * step;
         int ny = y + dy[dir] * step;
@@ -24,7 +26,6 @@ static int CountDirection(Board* board, int x, int y, int dir, int piece) {
         if (board->grid[nx][ny] == piece) count++;
         else break;
     }
-    
     for (int step = 1; step <= 5; step++) {
         int nx = x - dx[dir] * step;
         int ny = y - dy[dir] * step;
@@ -33,54 +34,119 @@ static int CountDirection(Board* board, int x, int y, int dir, int piece) {
         else break;
     }
     return count;
-}//²»°üÀ¨×Ô¼º(¿Ï¶¨¿Õ×Å²ÅÏÂ)
+}
 
-// ÆÀ¹À·ÖÊı
+// è¯„ä¼°æŸä¸ªç©ºä½å¯¹æŸæ–¹çš„ä»·å€¼
 static int EvaluatePosition(Board* board, int x, int y, int piece) {
     if (board->grid[x][y] != EMPTY) return 0;
-
     int totalScore = 0;
-
     for (int dir = 0; dir < 4; dir++) {
         int count = CountDirection(board, x, y, dir, piece);
-
-        //¸ù¾İÁ¬ĞøÆå×ÓÊı¸ø·Ö
         if (count >= 5) totalScore += WIN_SCORE;
         else if (count == 4) totalScore += LIVE_FOUR;
         else if (count == 3) totalScore += LIVE_THREE;
         else if (count == 2) totalScore += LIVE_TWO;
         else if (count == 1) totalScore += 1;
     }
-
     return totalScore;
 }
 
-void AISmartMove(Board* board, int* x, int* y, int aiPiece) {
+// æ£€æŸ¥æŸç©ºä½è½å­åèƒ½å¦ç«‹å³è·èƒœ
+static int CanWinImmediately(Board* board, int x, int y, int piece) {
+    board->grid[x][y] = piece;
+    int win = 0;
+    for (int dir = 0; dir < 4; dir++) {
+        if (CountDirection(board, x, y, dir, piece) >= 5) {
+            win = 1;
+            break;
+        }
+    }
+    board->grid[x][y] = EMPTY;
+    return win;
+}
+
+// ========== ç®€å•éš¾åº¦ï¼šçº¯éšæœº ==========
+static void AISimpleMove(Board* board, int* x, int* y, int aiPiece) {
+    (void)aiPiece;
+    int emptyCount = 0;
+    int emptyX[225], emptyY[225];
+
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (board->grid[i][j] == EMPTY) {
+                emptyX[emptyCount] = i;
+                emptyY[emptyCount] = j;
+                emptyCount++;
+            }
+        }
+    }
+
+    int idx = rand() % emptyCount;
+    *x = emptyX[idx];
+    *y = emptyY[idx];
+}
+
+// ========== ç®€å•-ä¸­ç­‰éš¾åº¦ï¼šæœ‰ä¼°å€¼æ„è¯†ä½†é˜²å®ˆå¼± ==========
+static void AIEasyMediumMove(Board* board, int* x, int* y, int aiPiece) {
     int bestScore = -1;
     int bestX = -1, bestY = -1;
     int opponentPiece = (aiPiece == PIECE_BLACK) ? PIECE_WHITE : PIECE_BLACK;
 
-    // Ã¿¸ö¿ÕÎ»ÆÀ¹ÀÒ»´Î
     for (int i = 0; i < BOARD_SIZE; i++) {
         for (int j = 0; j < BOARD_SIZE; j++) {
             if (board->grid[i][j] != EMPTY) continue;
-
-            // ½ø¹¥·Ö
             int attackScore = EvaluatePosition(board, i, j, aiPiece);
-            // ·ÀÊØ·Ö
-            int defendScore = EvaluatePosition(board, i, j, opponentPiece) * 8 / 10;  // ·ÀÊØÈ¨ÖØ0.8,´óĞ¡¸Ä±ä²ßÂÔ,¿ÉÒÔÊÔÊÔ0,Ö»¹¥²»·À
-
+            int defendScore = EvaluatePosition(board, i, j, opponentPiece) * 3 / 10;
             int totalScore = attackScore + defendScore;
-
             if (totalScore > bestScore) {
                 bestScore = totalScore;
                 bestX = i;
                 bestY = j;
-            }//¼ÇÂ¼ÒªÏÂµÄ¿ÕÎ»
+            }
         }
     }
 
-    // Èç¹ûÃ»ÕÒµ½ºÏÊÊÎ»ÖÃËæ»úÕÒÒ»¸ö¿ÕÎ»(²»´æÔÚ,³ı·ÇÏÈÊÖ)
+    if (bestX == -1 || bestScore < 50) {
+        int emptyCount = 0;
+        int emptyX[225], emptyY[225];
+        for (int i = 0; i < BOARD_SIZE; i++) {
+            for (int j = 0; j < BOARD_SIZE; j++) {
+                if (board->grid[i][j] == EMPTY) {
+                    emptyX[emptyCount] = i;
+                    emptyY[emptyCount] = j;
+                    emptyCount++;
+                }
+            }
+        }
+        int idx = rand() % emptyCount;
+        bestX = emptyX[idx];
+        bestY = emptyY[idx];
+    }
+
+    *x = bestX;
+    *y = bestY;
+}
+
+// ========== ä¸­ç­‰éš¾åº¦ï¼šæ”»å®ˆå¹³è¡¡ä¼°å€¼ ==========
+static void AIMediumMove(Board* board, int* x, int* y, int aiPiece) {
+    int bestScore = -1;
+    int bestX = -1, bestY = -1;
+    int opponentPiece = (aiPiece == PIECE_BLACK) ? PIECE_WHITE : PIECE_BLACK;
+
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (board->grid[i][j] != EMPTY) continue;
+            int attackScore = EvaluatePosition(board, i, j, aiPiece);
+            int defendScore = EvaluatePosition(board, i, j, opponentPiece) * 8 / 10;
+            int totalScore = attackScore + defendScore;
+            if (totalScore > bestScore) {
+                bestScore = totalScore;
+                bestX = i;
+                bestY = j;
+            }
+        }
+    }
+
     if (bestX == -1) {
         do {
             bestX = rand() % BOARD_SIZE;
@@ -90,4 +156,270 @@ void AISmartMove(Board* board, int* x, int* y, int aiPiece) {
 
     *x = bestX;
     *y = bestY;
+}
+
+// ========== ä¸­ç­‰-å›°éš¾éš¾åº¦ï¼šä¼°å€¼ + 1æ­¥æµ…å±‚æœç´¢ ==========
+static void AIMediumHardMove(Board* board, int* x, int* y, int aiPiece) {
+    int bestScore = -99999999;
+    int bestX = -1, bestY = -1;
+    int opponentPiece = (aiPiece == PIECE_BLACK) ? PIECE_WHITE : PIECE_BLACK;
+
+    // å…ˆæ£€æŸ¥èƒ½å¦ç«‹å³è·èƒœ
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (board->grid[i][j] != EMPTY) continue;
+            if (CanWinImmediately(board, i, j, aiPiece)) {
+                *x = i;
+                *y = j;
+                return;
+            }
+        }
+    }
+
+    // æ ‡è®°æœ‰æ£‹å­å‘¨å›´2æ ¼
+    int searchMap[BOARD_SIZE][BOARD_SIZE] = {0};
+    int hasPiece = 0;
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (board->grid[i][j] != EMPTY) {
+                hasPiece = 1;
+                for (int di = -2; di <= 2; di++) {
+                    for (int dj = -2; dj <= 2; dj++) {
+                        int ni = i + di, nj = j + dj;
+                        if (ni >= 0 && ni < BOARD_SIZE && nj >= 0 && nj < BOARD_SIZE) {
+                            searchMap[ni][nj] = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!hasPiece) { *x = 7; *y = 7; return; }
+
+    // å¯¹å€™é€‰ä½ç½®ç”¨å¿«é€Ÿä¼°å€¼ç­›é€‰å‰20ä¸ª
+    #define CANDIDATE_COUNT 225
+    typedef struct { int x, y, score; } Candidate;
+    Candidate candidates[CANDIDATE_COUNT];
+    int candidateCount = 0;
+
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (!searchMap[i][j]) continue;
+            if (board->grid[i][j] != EMPTY) continue;
+            candidates[candidateCount].x = i;
+            candidates[candidateCount].y = j;
+            candidates[candidateCount].score = EvaluatePosition(board, i, j, aiPiece)
+                                             + EvaluatePosition(board, i, j, opponentPiece);
+            candidateCount++;
+        }
+    }
+
+    // éƒ¨åˆ†æ’åºå–å‰20
+    #define TOP_N_MH 20
+    for (int i = 0; i < TOP_N_MH && i < candidateCount; i++) {
+        int maxIdx = i;
+        for (int j = i + 1; j < candidateCount; j++) {
+            if (candidates[j].score > candidates[maxIdx].score) maxIdx = j;
+        }
+        Candidate temp = candidates[i];
+        candidates[i] = candidates[maxIdx];
+        candidates[maxIdx] = temp;
+    }
+
+    int searchCount = (candidateCount < TOP_N_MH) ? candidateCount : TOP_N_MH;
+
+    // å¯¹å‰20ä¸ªåšæ·±åº¦1çš„Minimaxæœç´¢
+    for (int k = 0; k < searchCount; k++) {
+        int i = candidates[k].x;
+        int j = candidates[k].y;
+
+        board->grid[i][j] = aiPiece;
+        int score = -99999999;
+        
+        // æ¨¡æ‹Ÿå¯¹æ‰‹æœ€ä¼˜å›åº”
+        for (int oi = 0; oi < BOARD_SIZE; oi++) {
+            for (int oj = 0; oj < BOARD_SIZE; oj++) {
+                if (!searchMap[oi][oj]) continue;
+                if (board->grid[oi][oj] != EMPTY) continue;
+                
+                board->grid[oi][oj] = opponentPiece;
+                int oppScore = EvaluatePosition(board, oi, oj, opponentPiece);
+                board->grid[oi][oj] = EMPTY;
+                
+                if (-oppScore > score) score = -oppScore;
+            }
+        }
+        
+        board->grid[i][j] = EMPTY;
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestX = i;
+            bestY = j;
+        }
+    }
+
+    if (bestX == -1) { *x = 7; *y = 7; }
+    else { *x = bestX; *y = bestY; }
+}
+
+// ========== å›°éš¾éš¾åº¦ï¼šMinimax + Alpha-Beta å‰ªæ ==========
+static int Minimax(Board* board, int depth, int isMaximizing, int aiPiece, int alpha, int beta) {
+    int opponentPiece = (aiPiece == PIECE_BLACK) ? PIECE_WHITE : PIECE_BLACK;
+    int piece = isMaximizing ? aiPiece : opponentPiece;
+
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (board->grid[i][j] != EMPTY) continue;
+            if (CanWinImmediately(board, i, j, piece)) {
+                return isMaximizing ? WIN_SCORE + depth : -WIN_SCORE - depth;
+            }
+        }
+    }
+
+    if (depth == 0) {
+        int score = 0;
+        for (int i = 0; i < BOARD_SIZE; i++) {
+            for (int j = 0; j < BOARD_SIZE; j++) {
+                if (board->grid[i][j] != EMPTY) continue;
+                score += EvaluatePosition(board, i, j, aiPiece);
+                score -= EvaluatePosition(board, i, j, opponentPiece);
+            }
+        }
+        return score;
+    }
+
+    int bestScore = isMaximizing ? -99999999 : 99999999;
+
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (board->grid[i][j] != EMPTY) continue;
+
+            board->grid[i][j] = piece;
+            int score = Minimax(board, depth - 1, !isMaximizing, aiPiece, alpha, beta);
+            board->grid[i][j] = EMPTY;
+
+            if (isMaximizing) {
+                if (score > bestScore) bestScore = score;
+                if (bestScore > alpha) alpha = bestScore;
+            } else {
+                if (score < bestScore) bestScore = score;
+                if (bestScore < beta) beta = bestScore;
+            }
+            if (alpha >= beta) break;
+        }
+        if (alpha >= beta) break;
+    }
+
+    return bestScore;
+}
+
+static void AIHardMove(Board* board, int* x, int* y, int aiPiece) {
+    int bestScore = -99999999;
+    int bestX = -1, bestY = -1;
+    int opponentPiece = (aiPiece == PIECE_BLACK) ? PIECE_WHITE : PIECE_BLACK;
+
+    int searchMap[BOARD_SIZE][BOARD_SIZE] = {0};
+    int hasPiece = 0;
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (board->grid[i][j] != EMPTY) {
+                hasPiece = 1;
+                for (int di = -2; di <= 2; di++) {
+                    for (int dj = -2; dj <= 2; dj++) {
+                        int ni = i + di, nj = j + dj;
+                        if (ni >= 0 && ni < BOARD_SIZE && nj >= 0 && nj < BOARD_SIZE) {
+                            searchMap[ni][nj] = 1;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    if (!hasPiece) { *x = 7; *y = 7; return; }
+
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (!searchMap[i][j]) continue;
+            if (board->grid[i][j] != EMPTY) continue;
+            if (CanWinImmediately(board, i, j, aiPiece)) {
+                *x = i; *y = j; return;
+            }
+        }
+    }
+
+    #define MAX_CANDIDATES 225
+    typedef struct { int x, y, score; } Candidate;
+    Candidate candidates[MAX_CANDIDATES];
+    int candidateCount = 0;
+
+    for (int i = 0; i < BOARD_SIZE; i++) {
+        for (int j = 0; j < BOARD_SIZE; j++) {
+            if (!searchMap[i][j]) continue;
+            if (board->grid[i][j] != EMPTY) continue;
+            int attackScore = EvaluatePosition(board, i, j, aiPiece);
+            int defendScore = EvaluatePosition(board, i, j, opponentPiece);
+            candidates[candidateCount].x = i;
+            candidates[candidateCount].y = j;
+            candidates[candidateCount].score = attackScore + defendScore;
+            candidateCount++;
+        }
+    }
+
+    #define TOP_N 15
+    for (int i = 0; i < TOP_N && i < candidateCount; i++) {
+        int maxIdx = i;
+        for (int j = i + 1; j < candidateCount; j++) {
+            if (candidates[j].score > candidates[maxIdx].score) maxIdx = j;
+        }
+        Candidate temp = candidates[i];
+        candidates[i] = candidates[maxIdx];
+        candidates[maxIdx] = temp;
+    }
+
+    int searchCount = (candidateCount < TOP_N) ? candidateCount : TOP_N;
+
+    for (int k = 0; k < searchCount; k++) {
+        int i = candidates[k].x;
+        int j = candidates[k].y;
+
+        board->grid[i][j] = aiPiece;
+        int score = Minimax(board, 2, 0, aiPiece, -99999999, 99999999);
+        board->grid[i][j] = EMPTY;
+
+        if (score > bestScore) {
+            bestScore = score;
+            bestX = i;
+            bestY = j;
+        }
+    }
+
+    if (bestX == -1) { *x = 7; *y = 7; }
+    else { *x = bestX; *y = bestY; }
+}
+
+// ========== ç»Ÿä¸€å…¥å£ ==========
+void AISmartMove(Board* board, int* x, int* y, int aiPiece, AIDifficulty difficulty) {
+    switch (difficulty) {
+        case AI_EASY:
+            AISimpleMove(board, x, y, aiPiece);
+            break;
+        case AI_EASY_MEDIUM:
+            AIEasyMediumMove(board, x, y, aiPiece);
+            break;
+        case AI_MEDIUM:
+            AIMediumMove(board, x, y, aiPiece);
+            break;
+        case AI_MEDIUM_HARD:
+            AIMediumHardMove(board, x, y, aiPiece);
+            break;
+        case AI_HARD:
+            AIHardMove(board, x, y, aiPiece);
+            break;
+        default:
+            AIMediumMove(board, x, y, aiPiece);
+            break;
+    }
 }
